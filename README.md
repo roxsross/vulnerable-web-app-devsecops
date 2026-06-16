@@ -205,41 +205,6 @@ vulnerable-app/
 - [PortSwigger Web Security Academy](https://portswigger.net/web-security)
 - [Netlify Functions Documentation](https://docs.netlify.com/functions/overview/)
 
-## ⚖️ Disclaimer Legal
-
-Este proyecto es **exclusivamente para propósitos educativos** en entornos controlados.
-
-- ✅ Usar en clases de seguridad
-- ✅ Usar en labs privados
-- ✅ Usar para aprender y enseñar
-- ❌ NO deployar en producción
-- ❌ NO usar para atacar sistemas reales
-- ❌ NO compartir en dominios públicos sin protección
-
-El uso indebido de estas técnicas puede ser ilegal. Usar solo con autorización explícita.
-
-## 👨‍🏫 Para Instructores
-
-Este proyecto incluye:
-- Código completamente funcional y deployable
-- Comentarios explicativos en español para facilitar el aprendizaje
-- Referencias a herramientas específicas que detectan cada vulnerabilidad
-- Fixes sugeridos en comentarios
-- Pipeline CI/CD de ejemplo con security gates
-- Demostración de GitHub Push Protection (ver `GITHUB-PUSH-PROTECTION.md`)
-- Gestión de Dependabot configurada (ver `.github/DEPENDABOT-MANAGEMENT.md`)
-
-### ⚠️ Nota sobre Dependabot
-
-Las dependencias vulnerables (lodash, axios, express) están **intencionalmente congeladas** y configuradas para ser ignoradas por Dependabot. Si Dependabot abre PRs para actualizarlas, ciérralos sin mergear. Ver `.github/DEPENDABOT-MANAGEMENT.md` para detalles.
-
-**Sugerencia de flujo de clase:**
-1. Deploy de la app vulnerable
-2. Explotación manual de cada vulnerabilidad
-3. Ejecución de herramientas automatizadas
-4. Análisis de reportes
-5. Implementación de fixes
-6. Re-testing post-remediación
 
 ## 📧 Contacto
 
