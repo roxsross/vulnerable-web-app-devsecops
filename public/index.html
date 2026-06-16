@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vulnerable Web App - DevSecOps Demo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔓 Vulnerable Web App</h1>
+            <p class="warning">⚠️ Esta aplicación contiene vulnerabilidades INTENCIONALES para fines educativos</p>
+        </header>
+
+        <!-- [VULN-SENSITIVE-DATA]: API Key expuesta en el código fuente HTML -->
+        <!-- [FIX]: Nunca incluir API keys en el frontend. Usar variables de entorno en el backend -->
+        <!-- [TOOL]: SAST: TruffleHog, GitGuardian, Semgrep -->
+        <!-- [EDUCATIONAL] Estas NO son keys reales, son ejemplos para demostración -->
+        <!--
+            API_KEY: sk_test_FAKE_H4ck3rCanSeeThis_EDUCATIONAL_ONLY_123
+            SECRET_TOKEN: ghp_FAKE_token_not_real_educational_example_only
+        -->
+
+        <main>
+            <!-- Sección de Login -->
+            <section class="card">
+                <h2>🔐 Login (Broken Authentication)</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Usuario:</label>
+                        <input type="text" id="username" name="username" placeholder="Intenta: admin" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Contraseña:</label>
+                        <input type="password" id="password" name="password" placeholder="Intenta: admin123" required>
+                    </div>
+                    <button type="submit">Login</button>
+                </form>
+                <div id="loginResult" class="result"></div>
+                <p class="hint">💡 Hint: Las credenciales están hardcodeadas en el backend</p>
+            </section>
+
+            <!-- Sección de Búsqueda (SQL Injection) -->
+            <section class="card">
+                <h2>🔍 Búsqueda de Usuarios (SQL Injection)</h2>
+                <form id="searchForm">
+                    <div class="form-group">
+                        <label for="searchQuery">Buscar usuario:</label>
+                        <input type="text" id="searchQuery" name="query" placeholder="Intenta: admin' OR '1'='1" required>
+                    </div>
+                    <button type="submit">Buscar</button>
+                </form>
+                <div id="searchResult" class="result"></div>
+                <p class="hint">💡 Hint: El query se concatena directamente sin sanitización</p>
+            </section>
+
+            <!-- Sección de XSS -->
+            <section class="card">
+                <h2>💬 Comentarios (XSS)</h2>
+                <form id="commentForm">
+                    <div class="form-group">
+                        <label for="comment">Deja tu comentario:</label>
+                        <textarea id="comment" name="comment" placeholder="Intenta: <img src=x onerror=alert('XSS')>" rows="3" required></textarea>
+                    </div>
+                    <button type="submit">Enviar Comentario</button>
+                </form>
+                <div id="comments" class="result">
+                    <!-- [VULN-XSS]: Los comentarios se renderizan con innerHTML sin sanitización -->
+                    <!-- [FIX]: Usar textContent o DOMPurify para sanitizar HTML -->
+                    <!-- [TOOL]: SAST: Semgrep, ESLint security plugin | DAST: OWASP ZAP -->
+                </div>
+                <p class="hint">💡 Hint: Intenta inyectar un script o img tag con onerror</p>
+            </section>
+
+            <!-- Sección de IDOR -->
+            <section class="card">
+                <h2>👤 Ver Perfil de Usuario (IDOR)</h2>
+                <form id="userForm">
+                    <div class="form-group">
+                        <label for="userId">ID de Usuario:</label>
+                        <input type="number" id="userId" name="userId" placeholder="Intenta: 1, 2, 3..." value="1" required>
+                    </div>
+                    <button type="submit">Ver Perfil</button>
+                </form>
+                <div id="userResult" class="result"></div>
+                <p class="hint">💡 Hint: Cambia el ID para acceder a perfiles de otros usuarios sin validación</p>
+            </section>
+
+            <!-- Sección de Command Injection -->
+            <section class="card">
+                <h2>🖥️ Ping Server (Command Injection)</h2>
+                <form id="pingForm">
+                    <div class="form-group">
+                        <label for="hostname">Hostname o IP:</label>
+                        <input type="text" id="hostname" name="hostname" placeholder="Intenta: google.com; ls -la" required>
+                    </div>
+                    <button type="submit">Ping</button>
+                </form>
+                <div id="pingResult" class="result"></div>
+                <p class="hint">💡 Hint: Intenta inyectar comandos con ; o && o |</p>
+            </section>
+
+            <!-- Información de Vulnerabilidades -->
+            <section class="card info">
+                <h2>📚 Vulnerabilidades Incluidas</h2>
+                <ul>
+                    <li><strong>SQL Injection:</strong> Concatenación directa de input en queries</li>
+                    <li><strong>XSS:</strong> Renderizado de input sin sanitización (innerHTML)</li>
+                    <li><strong>Broken Authentication:</strong> Credenciales hardcodeadas, JWT sin expiración</li>
+                    <li><strong>Sensitive Data Exposure:</strong> API keys en el código fuente y responses</li>
+                    <li><strong>IDOR:</strong> Acceso a recursos sin validación de autorización</li>
+                    <li><strong>Security Misconfiguration:</strong> CORS abierto, headers de seguridad faltantes</li>
+                    <li><strong>Vulnerable Dependencies:</strong> lodash@4.17.15, axios@0.21.1, express@4.17.1</li>
+                    <li><strong>Command Injection:</strong> Ejecución de comandos sin sanitización</li>
+                </ul>
+                <p>Ver <code>VULNERABILITIES.md</code> para detalles completos de cada vulnerabilidad.</p>
+            </section>
+        </main>
+
+        <footer>
+            <p>🎓 Proyecto Educativo - ekoparty DevSecOps Course</p>
+            <p>⚠️ NO usar en producción - Solo para aprendizaje en entornos controlados</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

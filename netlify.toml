@@ -1,0 +1,79 @@
+# ========================================
+# Netlify Configuration - Vulnerable App
+# ========================================
+# ⚠️ Esta configuración contiene VULNERABILIDADES INTENCIONALES
+# para demostración educativa en cursos de DevSecOps
+
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+# ========================================
+# [VULN-SEC-MISCONFIG-01] CORS Abierto
+# ========================================
+# Permite peticiones desde cualquier origen
+# Severidad: MEDIA
+# OWASP: A05:2021 - Security Misconfiguration
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # [VULN] Access-Control-Allow-Origin: * permite cualquier origen
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "*"
+
+# ========================================
+# [VULN-SEC-MISCONFIG-02] Sin Headers de Seguridad
+# ========================================
+# NO se configuran headers de seguridad recomendados:
+# - X-Frame-Options (Clickjacking)
+# - X-Content-Type-Options (MIME sniffing)
+# - Content-Security-Policy (XSS)
+# - Strict-Transport-Security (HTTPS)
+# - Referrer-Policy
+# - Permissions-Policy
+#
+# [FIX] Descomentar estas líneas para remediar:
+# [[headers]]
+#   for = "/*"
+#   [headers.values]
+#     X-Frame-Options = "DENY"
+#     X-Content-Type-Options = "nosniff"
+#     Content-Security-Policy = "default-src 'self'"
+#     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+#     Referrer-Policy = "strict-origin-when-cross-origin"
+#     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# ========================================
+# Funciones Serverless
+# ========================================
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# ========================================
+# Redirects (ninguno configurado)
+# ========================================
+# [VULN-SEC-MISCONFIG-03] No se fuerza HTTPS
+# [FIX] Agregar redirect para forzar HTTPS:
+# [[redirects]]
+#   from = "http://*"
+#   to = "https://:splat"
+#   status = 301
+#   force = true
+
+# ========================================
+# NOTAS PARA EL CURSO
+# ========================================
+# Esta configuración es INTENCIONALMENTE INSEGURA
+#
+# Herramientas que detectan estos problemas:
+# - DAST: OWASP ZAP, Burp Suite
+# - Manual: Análisis de headers con curl/DevTools
+# - SAST: Semgrep, CodeQL (con reglas custom)
+#
+# Impacto de seguridad:
+# - CORS abierto: permite ataques CSRF desde cualquier origen
+# - Sin X-Frame-Options: vulnerable a Clickjacking
+# - Sin CSP: permite inyección de scripts XSS
+# - Sin HSTS: vulnerable a ataques downgrade HTTPS
