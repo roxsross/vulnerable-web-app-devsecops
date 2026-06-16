@@ -1,0 +1,82 @@
+name: "devsecops tools"
+on: 
+    push: 
+        branches: [master]
+jobs:
+    sast-codeql:
+        runs-on: ubuntu-latest
+        permissions:
+            actions: read
+            contents: read
+            security-events: write            
+        steps:
+        - uses: actions/checkout@v6
+        - name: Initialize CodeQL
+          uses: github/codeql-action/init@v4
+          with:
+            languages: javascript-typescript
+            build-mode: none
+        - name: Perform CodeQL Analysis
+          uses: github/codeql-action/analyze@v4
+          with:
+            category: "/language:javascript-typescript"
+ 
+    sast-semgrep:
+        runs-on: ubuntu-latest
+        permissions:
+            actions: read
+            contents: read
+            security-events: write            
+        steps:
+        - uses: actions/checkout@v6
+        - name: Run Semgrep 
+          run: |
+            docker run --rm \
+                -v "$(pwd):/src" \
+                semgrep/semgrep:latest \
+                semgrep scan \
+                --config=p/security-audit \
+                --config=p/nodejs \
+                --config=p/owasp-top-ten \
+                --config=p/javascript \
+                --config=p/typescript \
+                --config=p/expressjs \
+                --sarif \
+                --output=/src/semgrep-results.sarif
+
+        - name: Upload Semgrep results to GitHub Security
+          uses: github/codeql-action/upload-sarif@v4
+          if: always()
+          with:
+            sarif_file: semgrep-results.sarif
+            category: semgrep
+
+    sca-snyk:
+      runs-on: ubuntu-latest
+      permissions:
+          contents: read
+          security-events: write
+          pull-requests: write
+      steps:
+        - uses: actions/checkout@v6
+        - name: Setup Node.js
+          uses: actions/setup-node@v6
+          with:
+            node-version: '22'
+        - name: Install dependencies
+          run: npm install
+        - name: Run Snyk to check for vulnerabilities
+          uses: snyk/actions/node@master
+          env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          with:
+            command: test
+            args: >
+              --severity-threshold=high
+              --sarif-file-output=snyk-results.sarif
+        - name: Upload Snyk SARIF to GitHub Code Scanning
+          uses: github/codeql-action/upload-sarif@v4
+          if: ${{ always() && hashFiles('snyk-results.sarif') != '' }}
+          with:
+            sarif_file: snyk-results.sarif
+            category: snyk-sca
