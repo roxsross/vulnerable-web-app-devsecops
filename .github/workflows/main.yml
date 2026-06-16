@@ -12,7 +12,7 @@ jobs:
         steps:
         - uses: actions/checkout@v6
         - name: Scan secrets con Betterleaks
-            run: |
+          run: |
             docker run --rm \
                 --user "$(id -u):$(id -g)" \
                 -e HOME=/tmp \
@@ -23,12 +23,12 @@ jobs:
                 --report-path /repo/betterleaks.sarif \
                 --exit-code 0 \
                 -v
-       - name: Upload Betterleaks SARIF
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: betterleaks.sarif
-          category: betterleaks
+        - name: Upload Betterleaks SARIF
+          uses: github/codeql-action/upload-sarif@v4
+          if: always()
+          with:
+              sarif_file: betterleaks.sarif
+              category: betterleaks
 
     sast-codeql:
         runs-on: ubuntu-latest
