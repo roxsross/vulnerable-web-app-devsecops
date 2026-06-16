@@ -138,11 +138,11 @@ jobs:
             sarif_file: snyk-results.sarif
             category: snyk-sca
 
-    Deploy to Netlify:
+    DeploytoNetlify:
       runs-on: ubuntu-latest
       needs: [secret-scan, test, sast-codeql, sast-semgrep, sca-snyk ]
       if: github.event_name == 'push' && (github.ref == 'ref/heads/main' || github.ref == 'ref/heads/master')
-      environmets:
+      environment:
         name: production
         url: 'https://eclectic-sprinkles-185299.netlify.app'
       steps:
