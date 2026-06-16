@@ -172,3 +172,34 @@ jobs:
           env:
             NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
             NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+
+#####SCAN DAST CD
+    Dast:
+      runs-on: ubuntu-latest
+      needs: [DeploytoNetlify ]
+      steps:
+        - name: Run OWASP ZAP BASELINE
+          run: |
+            docker run --rm \
+              -v "$(pwd):/zap/wrk:rw" \
+              -u root \
+              ghcr.io/zaproxy/zaproxy:stable \
+              zap-baseline.py \
+              -t "${{ secrets.NETLIFY_SITE_URL }}" \
+              -r zap-report.html \
+              -J zap-report.json \
+              -x zap-report.xml \
+              -I || true
+          continue-on-error: true
+        - name: Upload ZAP reports as artifacts
+          uses: actions/upload-artifact@v7
+          if: always()
+          with:
+            name: zap-dast-reports
+            path: |
+              zap-report.html
+              zap-report.json
+              zap-report.xml
+            retention-days: 30
+            if-no-files-found: ignore
