@@ -1,21 +1,54 @@
+# ============================================================================
+# PIPELINE DEVSECOPS - VULNERABLE WEB APP
+# ============================================================================
+# Este workflow implementa un pipeline completo de seguridad que incluye:
+# - Secret Scanning (Betterleaks)
+# - SAST (CodeQL, Semgrep)
+# - SCA (Snyk)
+# - Testing (Unit tests + Coverage)
+# - Deployment (Netlify)
+# - DAST (OWASP ZAP)
+#
+# Documentación completa: Ver security.md
+# ============================================================================
+
 name: "devsecops tools"
-on: 
-    push: 
+
+# Trigger: Se ejecuta automáticamente en cada push a la rama master
+on:
+    push:
         branches: [master]
+
+# Variables de entorno globales
 env:
-  NODE_VERSION: "24"
+  NODE_VERSION: "24"  # Versión de Node.js para todos los jobs
 
 jobs:
-  #####CI SCAN SECRET 
+  # ==========================================================================
+  # JOB 1: SECRET SCANNING
+  # ==========================================================================
+  # Herramienta: Betterleaks
+  # Propósito: Detectar credenciales, tokens y secretos hardcodeados
+  # Alcance: Escanea TODO el historial de Git, no solo el último commit
+  # Bloquea pipeline: NO (exit-code: 0) - Considerar cambiar a 1 en producción
+  # ==========================================================================
     secret-scan:
         runs-on: ubuntu-latest
         permissions:
-            actions: read
-            contents: read
-            security-events: write            
+            actions: read              # Lee estado de workflows
+            contents: read             # Lee código del repositorio
+            security-events: write     # Escribe resultados en Security tab
         steps:
         - uses: actions/checkout@v6
+          # Checkout completo con historial para análisis de Git
+
         - name: Scan secrets con Betterleaks
+          # Betterleaks escanea en busca de:
+          # - API keys (AWS, Google Cloud, Azure, GitHub, etc.)
+          # - Tokens de autenticación
+          # - Credenciales de bases de datos
+          # - Certificados y claves privadas
+          # - Patrones de secretos personalizados
           run: |
             docker run --rm \
                 --user "$(id -u):$(id -g)" \
@@ -27,66 +60,117 @@ jobs:
                 --report-path /repo/betterleaks.sarif \
                 --exit-code 0 \
                 -v
+          # NOTA: exit-code 0 permite continuar incluso si encuentra secretos
+          # RECOMENDACIÓN: Cambiar a --exit-code 1 para bloquear en producción
+
         - name: Upload Betterleaks SARIF
           uses: github/codeql-action/upload-sarif@v4
-          if: always()
+          if: always()  # Sube reporte incluso si el escaneo falla
           with:
               sarif_file: betterleaks.sarif
-              category: betterleaks
-  ##### CI TEST 
+              category: betterleaks  # Categoría en GitHub Security tab
+  # ==========================================================================
+  # JOB 2: UNIT TESTS & COVERAGE
+  # ==========================================================================
+  # Propósito: Ejecutar pruebas unitarias y generar reporte de cobertura
+  # Dependencias: Requiere que secret-scan haya pasado
+  # Bloquea pipeline: NO (continue-on-error: true)
+  # RECOMENDACIÓN: Remover continue-on-error para bloquear deploy si fallan tests
+  # ==========================================================================
     test:
-        runs-on: ubuntu-latest 
-        needs: [secret-scan]         
+        runs-on: ubuntu-latest
+        needs: [secret-scan]  # Solo se ejecuta si secret-scan completa
         steps:
         - uses: actions/checkout@v6
+          # Checkout del código para ejecutar tests
+
         - name: Setup Node
           uses: actions/setup-node@v6
           with:
             node-version: ${{ env.NODE_VERSION }}
-            cache: "npm"
+            cache: "npm"  # Cachea node_modules para acelerar builds
 
         - name: Install dependencies
-          run: npm ci       
+          run: npm ci
+          # npm ci hace instalación limpia desde package-lock.json
+          # Más confiable que npm install para CI/CD
 
         - name: Run test
-          run: npm run test    
-          continue-on-error: true 
+          run: npm run test
+          continue-on-error: true
+          # continue-on-error permite que el pipeline continúe incluso si los tests fallan
+          # RIESGO: Código con tests fallidos puede llegar a producción
+          # RECOMENDACIÓN: Remover esta línea para entornos de producción
 
         - name: Run coverage
-          run: npm run test:coverage 
-          continue-on-error: true   
+          run: npm run test:coverage
+          continue-on-error: true
+          # Genera reporte de cobertura de código
+          # MEJORA: Agregar verificación de umbral mínimo (ej: 80%)   
 
-#####SCAN CI SAST codeql
+  # ==========================================================================
+  # JOB 3: SAST - CodeQL
+  # ==========================================================================
+  # Herramienta: GitHub CodeQL
+  # Propósito: Análisis estático semántico del código fuente
+  # Tipo: SAST (Static Application Security Testing)
+  # Detecta: SQL Injection, XSS, Command Injection, Path Traversal, etc.
+  # Ventaja: Análisis profundo del flujo de datos y control
+  # Documentación: https://codeql.github.com/docs/
+  # ==========================================================================
     sast-codeql:
         runs-on: ubuntu-latest
-        needs: [secret-scan, test]
+        needs: [secret-scan, test]  # Se ejecuta en paralelo con otros SAST/SCA
         permissions:
             actions: read
             contents: read
-            security-events: write            
+            security-events: write  # Necesario para subir resultados a Security tab
         steps:
         - uses: actions/checkout@v6
+
         - name: Initialize CodeQL
           uses: github/codeql-action/init@v4
           with:
             languages: javascript-typescript
-            build-mode: none
+            build-mode: none  # JavaScript/TypeScript no requiere compilación
+          # MEJORA SUGERIDA: Agregar queries extendidas
+          # queries: security-extended
+          # config-file: ./.github/codeql-config.yml
+
         - name: Perform CodeQL Analysis
           uses: github/codeql-action/analyze@v4
           with:
             category: "/language:javascript-typescript"
+          # Los resultados se suben automáticamente a GitHub Security tab
+          # Ver en: Security > Code scanning alerts > CodeQL
 
-#####SCAN CI SAST semgrep 
+  # ==========================================================================
+  # JOB 4: SAST - Semgrep
+  # ==========================================================================
+  # Herramienta: Semgrep
+  # Propósito: Análisis estático basado en patrones (pattern-based SAST)
+  # Tipo: SAST (Static Application Security Testing)
+  # Detecta: OWASP Top 10, patrones inseguros, anti-patrones
+  # Ventaja: Rápido, altamente configurable, menos falsos positivos
+  # Documentación: https://semgrep.dev/docs/
+  # ==========================================================================
     sast-semgrep:
         runs-on: ubuntu-latest
-        needs: [secret-scan, test]
+        needs: [secret-scan, test]  # Se ejecuta en paralelo con CodeQL y Snyk
         permissions:
             actions: read
             contents: read
-            security-events: write            
+            security-events: write
         steps:
         - uses: actions/checkout@v6
-        - name: Run Semgrep 
+
+        - name: Run Semgrep
+          # Semgrep utiliza múltiples rulesets para cobertura completa:
+          # - p/security-audit: Auditoría general de seguridad
+          # - p/nodejs: Reglas específicas de Node.js
+          # - p/owasp-top-ten: Vulnerabilidades OWASP Top 10
+          # - p/javascript & p/typescript: Reglas de lenguaje
+          # - p/expressjs: Patrones específicos de Express.js
           run: |
             docker run --rm \
                 -v "$(pwd):/src" \
@@ -100,56 +184,95 @@ jobs:
                 --config=p/expressjs \
                 --sarif \
                 --output=/src/semgrep-results.sarif
+          # MEJORA SUGERIDA: Agregar reglas personalizadas
+          # --config=/src/.semgrep/custom-rules.yml
+          # Excluir archivos de test si generan ruido:
+          # --exclude='**/*.test.js' --exclude='**/*.spec.ts'
 
         - name: Upload Semgrep results to GitHub Security
           uses: github/codeql-action/upload-sarif@v4
-          if: always()
+          if: always()  # Sube resultados incluso si Semgrep encuentra issues
           with:
             sarif_file: semgrep-results.sarif
-            category: semgrep
+            category: semgrep  # Categoría en GitHub Security tab
 
-#####SCAN CI SCA snyk
+  # ==========================================================================
+  # JOB 5: SCA - Snyk
+  # ==========================================================================
+  # Herramienta: Snyk
+  # Propósito: Análisis de dependencias (Software Composition Analysis)
+  # Tipo: SCA - Detecta vulnerabilidades conocidas en dependencias
+  # Detecta: CVEs, vulnerabilidades de licencias, dependencias obsoletas
+  # Requiere: SNYK_TOKEN en GitHub Secrets (obtener en snyk.io)
+  # Documentación: https://docs.snyk.io/
+  # ==========================================================================
     sca-snyk:
       runs-on: ubuntu-latest
-      needs: [secret-scan, test]
+      needs: [secret-scan, test]  # Se ejecuta en paralelo con SAST jobs
       permissions:
           contents: read
-          security-events: write
-          pull-requests: write
+          security-events: write    # Para subir resultados SARIF
+          pull-requests: write      # Para comentar en PRs
       steps:
         - uses: actions/checkout@v6
+
         - name: Setup Node.js
           uses: actions/setup-node@v6
           with:
             node-version: '22'
+
         - name: Install dependencies
           run: npm install
+          # Instala dependencias para que Snyk pueda analizarlas
+
         - name: Run Snyk to check for vulnerabilities
           uses: snyk/actions/node@master
           env:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+            # IMPORTANTE: Configurar SNYK_TOKEN en:
+            # Settings > Secrets and variables > Actions > New repository secret
           with:
             command: test
             args: >
               --severity-threshold=high
               --sarif-file-output=snyk-results.sarif
+          # severity-threshold=high: Solo reporta vulnerabilidades High/Critical
+          # RECOMENDACIÓN: Cambiar a "medium" para mayor cobertura
+          # OPCIONES: low, medium, high, critical
           continue-on-error: true
+          # RIESGO: Permite deploy incluso con vulnerabilidades críticas
+          # RECOMENDACIÓN: Remover para bloquear en producción
+
         - name: Upload Snyk SARIF to GitHub Code Scanning
           uses: github/codeql-action/upload-sarif@v4
           if: ${{ always() && hashFiles('snyk-results.sarif') != '' }}
+          # Solo sube si el archivo SARIF existe
           with:
             sarif_file: snyk-results.sarif
             category: snyk-sca
+          # Ver resultados en: Security > Code scanning alerts > Snyk
 
-#####DEPLOY CD Netlify
+  # ==========================================================================
+  # JOB 6: DEPLOYMENT - Netlify
+  # ==========================================================================
+  # Propósito: Desplegar aplicación a producción en Netlify
+  # Dependencias: Todos los escaneos de seguridad deben completar antes
+  # Environment: production
+  # URL: https://eclectic-sprinkles-185299.netlify.app
+  # Requiere: NETLIFY_AUTH_TOKEN, NETLIFY_SITE_ID en GitHub Secrets
+  # ==========================================================================
     DeploytoNetlify:
       runs-on: ubuntu-latest
-      needs: [secret-scan, test, sast-codeql, sast-semgrep, sca-snyk ]
+      # Este job SOLO se ejecuta si TODOS los jobs anteriores completan exitosamente
+      # Esto asegura que código con vulnerabilidades conocidas no llegue a producción
+      needs: [secret-scan, test, sast-codeql, sast-semgrep, sca-snyk]
       environment:
         name: production
         url: 'https://eclectic-sprinkles-185299.netlify.app'
+        # MEJORA: Crear environment de staging para testing antes de producción
       steps:
         - uses: actions/checkout@v6
+
         - name: Setup Node.js
           uses: actions/setup-node@v6
           with:
@@ -157,7 +280,8 @@ jobs:
             cache: "npm"
 
         - name: Install dependencies
-          run: npm ci    
+          run: npm ci
+          # Instalación limpia de dependencias
 
         - name: Deploy to Netlify
           uses: nwtgck/actions-netlify@v3.0
@@ -166,25 +290,47 @@ jobs:
             production-branch: master
             github-token: ${{ secrets.GITHUB_TOKEN }}
             deploy-message: "Deploy from GitHub Actions"
-            enable-pull-request-comment: true
-            enable-commit-comment: true
+            enable-pull-request-comment: true    # Comenta en PRs con preview URL
+            enable-commit-comment: true          # Comenta en commits
             overwrites-pull-request-comment: true
           env:
             NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
             NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          # MEJORA: Agregar netlify.toml con headers de seguridad:
+          # X-Frame-Options, X-Content-Type-Options, X-XSS-Protection,
+          # Content-Security-Policy, Referrer-Policy
 
 
-#####SCAN DAST CD
+  # ==========================================================================
+  # JOB 7: DAST - OWASP ZAP
+  # ==========================================================================
+  # Herramienta: OWASP ZAP (Zed Attack Proxy)
+  # Propósito: Análisis dinámico de seguridad (testing en aplicación desplegada)
+  # Tipo: DAST (Dynamic Application Security Testing)
+  # Detecta: Vulnerabilidades en tiempo de ejecución, configuraciones inseguras
+  # Modo: zap-baseline.py (escaneo NO intrusivo, seguro para producción)
+  # Documentación: https://www.zaproxy.org/docs/
+  # ==========================================================================
     Dast:
       runs-on: ubuntu-latest
-      needs: [DeploytoNetlify ]
+      needs: [DeploytoNetlify]  # Se ejecuta DESPUÉS del deployment
+      # NOTA: Las vulnerabilidades detectadas aquí YA están en producción
+      # MEJORA: Ejecutar en staging antes de producción
       steps:
         - name: Checkout código
           uses: actions/checkout@v6
+          # Necesario para acceder al script zap-to-sarif.py
+
         - uses: actions/setup-python@v6
           with:
-            python-version: '3.13' 
+            python-version: '3.13'
+          # Python necesario para script de conversión a SARIF
+
         - name: Run OWASP ZAP BASELINE
+          # ZAP Baseline Scan: Escaneo pasivo y spider básico
+          # NO es intrusivo (no intenta explotar vulnerabilidades)
+          # Detecta: Headers inseguros, cookies sin flags, información expuesta, etc.
+          # Para escaneo completo: Cambiar a zap-full-scan.py (solo en staging!)
           run: |
             docker run --rm \
               -v "$(pwd):/zap/wrk:rw" \
@@ -196,9 +342,22 @@ jobs:
               -J zap-report.json \
               -x zap-report.xml \
               -I || true
+          # -t: Target URL (sitio a escanear)
+          # -r: HTML report
+          # -J: JSON report
+          # -x: XML report
+          # -I: No falla el pipeline si encuentra issues
+          # || true: Asegura que no falle el step
           continue-on-error: true
+          # OPCIONES ADICIONALES:
+          # -z: Agregar opciones de ZAP (ej: -z "-config api.key=...")
+          # -c: Archivo de configuración personalizado
+          # -n: Context file para autenticación
 
         - name: Convert ZAP JSON To Sarif
+          # Script personalizado que convierte JSON de ZAP a formato SARIF
+          # Mapea severidades y extrae información relevante
+          # Ver: .github/scripts/zap-to-sarif.py
           run: python3 .github/scripts/zap-to-sarif.py
           env:
             ZAP_JSON: zap-report.json
@@ -206,12 +365,15 @@ jobs:
 
         - name: Upload ZAP results to GitHub Security
           uses: github/codeql-action/upload-sarif@v4
-          if: always()
+          if: always()  # Sube incluso si el escaneo falló
           with:
             sarif_file: zap-results.sarif
             category: owasp-zap
+          # Resultados visibles en: Security > Code scanning alerts > OWASP ZAP
 
         - name: Upload ZAP reports as artifacts
+          # Preserva todos los reportes de ZAP como artifacts descargables
+          # Útil para análisis detallado y auditorías
           uses: actions/upload-artifact@v7
           if: always()
           with:
@@ -221,5 +383,6 @@ jobs:
               zap-report.json
               zap-report.xml
               zap-results.sarif
-            retention-days: 30
+            retention-days: 30  # Se conservan por 30 días
             if-no-files-found: ignore
+          # Descargar desde: Actions > Workflow run > Artifacts section
