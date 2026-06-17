@@ -316,6 +316,10 @@ jobs:
       needs: [DeploytoNetlify]  # Se ejecuta DESPUÉS del deployment
       # NOTA: Las vulnerabilidades detectadas aquí YA están en producción
       # MEJORA: Ejecutar en staging antes de producción
+      permissions:
+          contents: read
+          security-events: write    # Para subir resultados SARIF
+          pull-requests: write      # Para comentar en PRs
       steps:
         - name: Checkout código
           uses: actions/checkout@v6
